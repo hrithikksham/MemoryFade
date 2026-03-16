@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+typer
+requests
+sentence-transformers
+qdrant-client
+supabase
+groq
+python-dotenv
