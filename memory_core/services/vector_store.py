@@ -27,10 +27,11 @@ def insert_vector(memory_id: str, embedding: list[float]):
         ]
     )
 
-def search_vectors(embedding: list[float], top_k: int = 5) -> list[str]:
+def search_vectors_with_scores(embedding: list[float], top_k: int = 5):
     results = client.query_points(
         collection_name=COLLECTION_NAME,
         query=embedding,
         limit=top_k
     ).points
-    return [hit.payload["memory_id"] for hit in results]
+
+    return results

@@ -9,7 +9,7 @@ class QueryRequest(BaseModel):
 class MemoryResponse(BaseModel):
     message: str
     memory_id: str
+    importance: float
 
 class QueryResponse(BaseModel):
-    top_memories: list[str]
     answer: str
