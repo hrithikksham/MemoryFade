@@ -7,7 +7,7 @@ from config.settings import SIMILARITY_THRESHOLD, TOP_K, TOP_N
 
 def retrieve_and_update(query: str):
     apply_decay_to_all()
-    
+
     embedding = generate_embedding(query)
 
 
@@ -36,6 +36,7 @@ def retrieve_and_update(query: str):
     memory_ids = [hit.payload["memory_id"] for hit in selected_hits]
 
     # Step 7: fetch memory data
+    memories = [m for m in memories if m["state"] != "ARCHIVED"]
     memories = fetch_memories_by_ids(memory_ids)
 
     # Step 8: reinforce ONLY selected memories

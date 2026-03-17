@@ -5,14 +5,19 @@ from services.memory_store import get_all_memories, update_memory_fields
 def compute_decay(memory):
     now = datetime.now(timezone.utc)
 
-    last_accessed = memory["last_accessed"]
-    if isinstance(last_accessed, str):
-        last_accessed = datetime.fromisoformat(last_accessed.replace("Z", "+00:00"))
+    last_decay = memory.get("last_decay_run", memory["last_accessed"])
 
-    days = (now - last_accessed).days
+    if isinstance(last_decay, str):
+        last_decay = datetime.fromisoformat(last_decay.replace("Z", "+00:00"))
 
-    # Decay formula
-    decay = days * 2  # simple linear decay
+    delta = now - last_decay
+    days = delta.total_seconds() / 86400
+
+    # ❗ Only decay if enough time passed
+    if days < 1:
+        return memory["strength"]  # skip
+
+    decay = round(days * 2, 2)
     new_strength = max(memory["strength"] - decay, 0)
 
     return new_strength
@@ -37,7 +42,8 @@ def apply_decay_to_all():
         update_memory_fields(
             memory_id=memory["id"],
             strength=new_strength,
-            state=new_state
+            state=new_state,
+            last_decay_run=now_utc().isoformat() # fix needed here
         )
 
     print(f"[DECAY] {memory['text'][:30]}... | {memory['strength']} → {new_strength} | {new_state}")
