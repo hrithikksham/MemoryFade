@@ -6,40 +6,53 @@ from config.settings import SIMILARITY_THRESHOLD, TOP_K, TOP_N
 
 
 def retrieve_and_update(query: str):
+    # Step 1: Apply decay (safe, controlled)
     apply_decay_to_all()
 
+    # Step 2: Generate embedding
     embedding = generate_embedding(query)
 
-
-    # Step 2: search vectors
+    # Step 3: Vector search
     hits = search_vectors_with_scores(embedding, top_k=TOP_K)
 
     if not hits:
         return []
 
+    # Step 4: Filter by similarity threshold
     filtered_hits = [
         hit for hit in hits
         if hit.score >= SIMILARITY_THRESHOLD
-        ]
+    ]
 
-    if not filtered_hits and hits:
-    # take best match anyway
+    # Step 5: Fallback → take best match
+    if not filtered_hits:
         filtered_hits = [hits[0]]
 
-    # Step 4: sort by score (descending)
+    # Step 6: Rank by similarity
     ranked_hits = sorted(filtered_hits, key=lambda x: x.score, reverse=True)
 
-    # Step 5: select top N
+    # Step 7: Take top N
     selected_hits = ranked_hits[:TOP_N]
 
-    # Step 6: extract memory IDs
+    # Step 8: Extract IDs
     memory_ids = [hit.payload["memory_id"] for hit in selected_hits]
 
-    # Step 7: fetch memory data
-    memories = [m for m in memories if m["state"] != "ARCHIVED"]
+    if not memory_ids:
+        return []
+
+    # Step 9: Fetch memories from DB
     memories = fetch_memories_by_ids(memory_ids)
 
-    # Step 8: reinforce ONLY selected memories
+    if not memories:
+        return []
+
+    # Step 10: Remove archived memories
+    memories = [m for m in memories if m["state"] != "ARCHIVED"]
+
+    if not memories:
+        return []
+
+    # Step 11: Reinforce selected memories
     for mem in memories:
         update_memory_access(mem["id"])
 

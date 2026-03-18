@@ -67,8 +67,9 @@ def get_all_memories():
     response = client.table("memories").select("*").execute()
     return response.data
 
-def update_memory_fields(memory_id: str, strength: float, state: str):
+def update_memory_fields(memory_id: str, strength: float, state: str, last_decay_run: str):
     client.table("memories").update({
         "strength": strength,
-        "state": state
+        "state": state,
+        "last_decay_run": last_decay_run
     }).eq("id", memory_id).execute()
