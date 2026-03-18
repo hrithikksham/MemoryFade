@@ -1,59 +1,149 @@
 from services.embeddings import generate_embedding
 from services.vector_store import search_vectors_with_scores
 from services.memory_store import fetch_memories_by_ids, update_memory_access
-from services.decay_engine import apply_decay_to_all
-from config.settings import SIMILARITY_THRESHOLD, TOP_K, TOP_N
+from services.decay_engine import apply_decay_to_user
+from config.settings import TOP_K, TOP_N
+from utils.time_utils import days_since
 
 
-def retrieve_and_update(query: str):
-    # Step 1: Apply decay (safe, controlled)
-    apply_decay_to_all()
+def compute_final_score(hit, memory):
+    """
+    Production-grade scoring function
+    """
 
-    # Step 2: Generate embedding
+    # -----------------------------
+    # Core Signals
+    # -----------------------------
+    similarity = getattr(hit, "score", 0.0)
+
+    importance = memory.get("importance", 0)
+    strength = memory.get("strength", 0) / 100
+
+    # safer datetime handling
+    last_accessed = memory.get("last_accessed")
+    recency_days = days_since(last_accessed) if last_accessed else 0
+
+    # normalize recency (0 → recent, 1 → old)
+    recency_score = max(0, 1 - (recency_days / 30))
+
+    # -----------------------------
+    # State penalty (IMPORTANT FIX)
+    # -----------------------------
+    state = memory.get("state", "FRESH")
+
+    state_penalty = 1.0
+    if state == "ARCHIVED":
+        state_penalty = 0.2   # instead of removing → penalize
+    elif state == "FADING":
+        state_penalty = 0.7
+
+    # -----------------------------
+    # Final Weighted Score
+    # -----------------------------
+    score = (
+        0.5 * similarity +
+        0.2 * importance +
+        0.2 * strength +
+        0.1 * recency_score
+    ) * state_penalty
+
+    return score
+
+
+def retrieve_and_update(query: str, user_id: str):
+    # -----------------------------
+    # Step 1: Apply decay
+    # -----------------------------
+    apply_decay_to_user(user_id)
+
+    # -----------------------------
+    # Step 2: Normalize query
+    # -----------------------------
+    query = query.strip().lower()
+
+    # -----------------------------
+    # Step 3: Generate embedding
+    # -----------------------------
     embedding = generate_embedding(query)
 
-    # Step 3: Vector search
-    hits = search_vectors_with_scores(embedding, top_k=TOP_K)
+    # -----------------------------
+    # Step 4: Vector search
+    # -----------------------------
+    hits = search_vectors_with_scores(
+        embedding,
+        user_id=user_id,
+        top_k=TOP_K
+    )
 
     if not hits:
         return []
 
-    # Step 4: Filter by similarity threshold
-    filtered_hits = [
-        hit for hit in hits
-        if hit.score >= SIMILARITY_THRESHOLD
-    ]
+    # -----------------------------
+    # DEBUG (keep for now)
+    # -----------------------------
+    print("\n--- VECTOR HITS ---")
+    for hit in hits:
+        print("ID:", hit.payload["memory_id"], "SCORE:", getattr(hit, "score", 0))
 
-    # Step 5: Fallback → take best match
-    if not filtered_hits:
-        filtered_hits = [hits[0]]
-
-    # Step 6: Rank by similarity
-    ranked_hits = sorted(filtered_hits, key=lambda x: x.score, reverse=True)
-
-    # Step 7: Take top N
-    selected_hits = ranked_hits[:TOP_N]
-
-    # Step 8: Extract IDs
-    memory_ids = [hit.payload["memory_id"] for hit in selected_hits]
+    # -----------------------------
+    # Step 5: Extract IDs
+    # -----------------------------
+    memory_ids = [hit.payload["memory_id"] for hit in hits]
 
     if not memory_ids:
         return []
 
-    # Step 9: Fetch memories from DB
-    memories = fetch_memories_by_ids(memory_ids)
+    # -----------------------------
+    # Step 6: Fetch DB memories
+    # -----------------------------
+    memories = fetch_memories_by_ids(memory_ids, user_id)
 
     if not memories:
         return []
 
-    # Step 10: Remove archived memories
-    memories = [m for m in memories if m["state"] != "ARCHIVED"]
+    # -----------------------------
+    # Step 7: Map memories
+    # -----------------------------
+    memory_map = {m["id"]: m for m in memories}
 
-    if not memories:
+    # -----------------------------
+    # Step 8: Compute scores
+    # -----------------------------
+    scored = []
+
+    for hit in hits:
+        mem_id = hit.payload["memory_id"]
+
+        if mem_id not in memory_map:
+            continue
+
+        memory = memory_map[mem_id]
+
+        final_score = compute_final_score(hit, memory)
+
+        scored.append((memory, final_score))
+
+    if not scored:
         return []
 
-    # Step 11: Reinforce selected memories
-    for mem in memories:
-        update_memory_access(mem["id"])
+    # -----------------------------
+    # Step 9: Sort
+    # -----------------------------
+    ranked = sorted(
+        scored,
+        key=lambda x: x[1],
+        reverse=True
+    )
 
-    return memories
+    # -----------------------------
+    # Step 10: Select Top N
+    # -----------------------------
+    top_memories = [m for m, _ in ranked[:TOP_N]]
+
+    # -----------------------------
+    # Step 11: Reinforcement
+    # -----------------------------
+    for mem in top_memories:
+        update_memory_access(mem["id"], user_id)
+
+    return top_memories

@@ -1,5 +1,6 @@
 import typer
 import requests
+import os
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -10,8 +11,38 @@ console = Console()
 
 BASE_URL = "http://localhost:8000"
 
+# 🔐 Supabase config (REPLACE THESE)
+SUPABASE_URL = "https://zizfygdqcfcxhonawffk.supabase.co"
+SUPABASE_API_KEY = "sb_publishable_jgFPwCRrMOF2ieiay3XU_Q_uAtVjSOg"
 
-# ---------- Helper Functions ---------- #
+# 📁 Token storage
+TOKEN_PATH = os.path.expanduser("~/.memoryfade_token")
+
+
+# ---------- TOKEN HELPERS ---------- #
+
+def save_token(token: str):
+    with open(TOKEN_PATH, "w") as f:
+        f.write(token)
+
+
+def load_token():
+    if not os.path.exists(TOKEN_PATH):
+        console.print("[red]Not logged in. Run: login[/red]")
+        raise typer.Exit()
+    with open(TOKEN_PATH, "r") as f:
+        return f.read().strip()
+
+
+def get_headers():
+    token = load_token()
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+
+# ---------- ERROR HANDLING ---------- #
 
 def handle_api_error(response):
     if response.status_code != 200:
@@ -37,15 +68,59 @@ def safe_json(response):
         raise typer.Exit()
 
 
-# ---------- Commands ---------- #
+# ---------- AUTH COMMAND ---------- #
+
+@app.command()
+def login(email: str, password: str):
+    """Login using Supabase"""
+
+    url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
+
+    headers = {
+        "apikey": SUPABASE_API_KEY,
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(url, headers=headers, json={
+        "email": email,
+        "password": password
+    })
+
+    if response.status_code != 200:
+        console.print(
+            Panel(
+                f"[bold red]Login Failed[/bold red]\n\n{response.text}",
+                border_style="red"
+            )
+        )
+        raise typer.Exit()
+
+    data = response.json()
+    token = data["access_token"]
+
+    save_token(token)
+
+    console.print(
+        Panel(
+            "[bold green]Login Successful[/bold green]",
+            border_style="green"
+        )
+    )
+
+
+# ---------- MEMORY COMMANDS ---------- #
 
 @app.command()
 def add(text: str):
     """Add a new memory"""
 
-    response = requests.post(f"{BASE_URL}/memory", json={"text": text})
-    handle_api_error(response)
+    response = requests.post(
+        f"{BASE_URL}/memory",
+        json={"text": text},
+        headers=get_headers()
+    )
 
+    handle_api_error(response)
     data = safe_json(response)
 
     console.print(
@@ -63,72 +138,37 @@ def add(text: str):
 def search(query: str):
     """Search memories and get an AI answer"""
 
-    response = requests.post(f"{BASE_URL}/query", json={"query": query})
-    handle_api_error(response)
-
-    data = safe_json(response)
-
-    # Case 1 — Only answer (no memories returned)
-    if "top_memories" not in data:
-        console.print(
-            Panel(
-                data.get("answer", "No answer available"),
-                title="[bold blue]AI Answer[/bold blue]",
-                border_style="blue"
-            )
-        )
-        return
-
-    # Case 2 — No memories
-    if not data["top_memories"]:
-        console.print(
-            Panel(
-                "[yellow]No memory found[/yellow]",
-                title="Search Result",
-                border_style="yellow"
-            )
-        )
-
-        console.print(
-            Panel(
-                data.get("answer", "No answer available"),
-                title="[bold blue]AI Answer[/bold blue]",
-                border_style="blue"
-            )
-        )
-        return
-
-    # Case 3 — Normal flow (memories + answer)
-    table = Table(
-        title="Top Memories",
-        header_style="bold magenta",
-        box=box.ROUNDED
+    response = requests.post(
+        f"{BASE_URL}/query",
+        json={"query": query},
+        headers=get_headers()
     )
 
-    table.add_column("Rank", style="cyan", justify="center")
-    table.add_column("Memory", style="white")
+    handle_api_error(response)
+    data = safe_json(response)
 
-    for i, memory in enumerate(data["top_memories"], 1):
-        table.add_row(str(i), memory)
-
-    console.print(table)
 
     console.print(
         Panel(
-            data.get("answer", "No answer generated"),
+            data.get("answer", "No answer available"),
             title="[bold blue]AI Answer[/bold blue]",
             border_style="blue"
         )
     )
 
 
+
+
 @app.command()
 def status(memory_id: str):
     """Check memory state and strength"""
 
-    response = requests.get(f"{BASE_URL}/memory/{memory_id}")
-    handle_api_error(response)
+    response = requests.get(
+        f"{BASE_URL}/memory/{memory_id}",
+        headers=get_headers()
+    )
 
+    handle_api_error(response)
     data = safe_json(response)
 
     console.print(
@@ -145,7 +185,7 @@ def status(memory_id: str):
     )
 
 
-# ---------- Entry ---------- #
+# ---------- ENTRY ---------- #
 
 if __name__ == "__main__":
     app()
