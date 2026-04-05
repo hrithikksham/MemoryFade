@@ -184,6 +184,19 @@ def status(memory_id: str):
         )
     )
 
+@app.command()
+def decay(memory_id: str):
+    """Manually trigger decay on a memory."""
+    response = requests.post(f"{BASE_URL}/memory/{memory_id}/decay")
+    data = response.json()
+    console.print(
+        Panel(
+            f"[bold]Strength:[/bold] {data['strength']}\n"
+            f"[bold]State:[/bold] {data['state']}",
+            title="Decay Applied",
+            border_style="red"
+        )
+    )
 
 # ---------- ENTRY ---------- #
 

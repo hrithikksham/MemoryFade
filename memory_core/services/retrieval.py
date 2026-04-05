@@ -6,144 +6,107 @@ from config.settings import TOP_K, TOP_N
 from utils.time_utils import days_since
 
 
-def compute_final_score(hit, memory):
-    """
-    Production-grade scoring function
-    """
+# ----------------------------------
+# FINAL SCORING FUNCTION
+# ----------------------------------
 
-    # -----------------------------
-    # Core Signals
-    # -----------------------------
+def compute_final_score(hit, memory) -> float:
     similarity = getattr(hit, "score", 0.0)
 
-    importance = memory.get("importance", 0)
-    strength = memory.get("strength", 0) / 100
+    importance = memory.get("importance", 5) / 10
+    strength = memory.get("strength", 50) / 100
 
-    # safer datetime handling
     last_accessed = memory.get("last_accessed")
     recency_days = days_since(last_accessed) if last_accessed else 0
-
-    # normalize recency (0 → recent, 1 → old)
     recency_score = max(0, 1 - (recency_days / 30))
 
-    # -----------------------------
-    # State penalty (IMPORTANT FIX)
-    # -----------------------------
     state = memory.get("state", "FRESH")
+    state_penalty = {
+        "ARCHIVED": 0.25,
+        "FADING": 0.75
+    }.get(state, 1.0)
 
-    state_penalty = 1.0
-    if state == "ARCHIVED":
-        state_penalty = 0.2   # instead of removing → penalize
-    elif state == "FADING":
-        state_penalty = 0.7
-
-    # -----------------------------
-    # Final Weighted Score
-    # -----------------------------
-    score = (
-        0.5 * similarity +
-        0.2 * importance +
-        0.2 * strength +
-        0.1 * recency_score
+    final_score = (
+        0.55 * similarity +
+        0.15 * importance +
+        0.20 * strength +
+        0.10 * recency_score
     ) * state_penalty
 
-    return score
+    return final_score
 
 
-def retrieve_and_update(query: str, user_id: str):
-    # -----------------------------
-    # Step 1: Apply decay
-    # -----------------------------
+# ----------------------------------
+# MAIN RETRIEVAL PIPELINE
+# ----------------------------------
+
+def retrieve_and_update(
+    query: str,
+    user_id: str,
+    embedding_model: str = "mxbai" 
+) -> list:
+
+    # 1. Apply decay before retrieval
     apply_decay_to_user(user_id)
 
-    # -----------------------------
-    # Step 2: Normalize query
-    # -----------------------------
+    # 2. Normalize query
     query = query.strip().lower()
 
-    # -----------------------------
-    # Step 3: Generate embedding
-    # -----------------------------
-    embedding = generate_embedding(query)
+    # 3. Generate embedding
+    embedding = generate_embedding(query, model_name=embedding_model)
 
-    # -----------------------------
-    # Step 4: Vector search
-    # -----------------------------
+    # 4. Vector search — fixed: keyword arg is model_name not embedding_model
     hits = search_vectors_with_scores(
         embedding,
         user_id=user_id,
-        top_k=TOP_K
+        top_k=TOP_K,
+        model_name=embedding_model
     )
 
     if not hits:
         return []
 
-    # -----------------------------
-    # DEBUG (keep for now)
-    # -----------------------------
     print("\n--- VECTOR HITS ---")
     for hit in hits:
-        print("ID:", hit.payload["memory_id"], "SCORE:", getattr(hit, "score", 0))
+        print(
+            "ID:", hit.payload["memory_id"],
+            "SIM:", round(getattr(hit, "score", 0), 3)
+        )
 
-    # -----------------------------
-    # Step 5: Extract IDs
-    # -----------------------------
+    # 5. Fetch memories from Supabase
     memory_ids = [hit.payload["memory_id"] for hit in hits]
-
-    if not memory_ids:
-        return []
-
-    # -----------------------------
-    # Step 6: Fetch DB memories
-    # -----------------------------
     memories = fetch_memories_by_ids(memory_ids, user_id)
 
     if not memories:
         return []
 
-    # -----------------------------
-    # Step 7: Map memories
-    # -----------------------------
     memory_map = {m["id"]: m for m in memories}
 
-    # -----------------------------
-    # Step 8: Compute scores
-    # -----------------------------
-    scored = []
-
+    # 6. Score each hit
+    scored_memories = []
     for hit in hits:
         mem_id = hit.payload["memory_id"]
-
         if mem_id not in memory_map:
             continue
-
         memory = memory_map[mem_id]
+        score = compute_final_score(hit, memory)
+        scored_memories.append((memory, score))
 
-        final_score = compute_final_score(hit, memory)
-
-        scored.append((memory, final_score))
-
-    if not scored:
+    if not scored_memories:
         return []
 
-    # -----------------------------
-    # Step 9: Sort
-    # -----------------------------
-    ranked = sorted(
-        scored,
-        key=lambda x: x[1],
-        reverse=True
-    )
+    # 7. Rank by final score
+    ranked = sorted(scored_memories, key=lambda x: x[1], reverse=True)
 
-    # -----------------------------
-    # Step 10: Select Top N
-    # -----------------------------
-    top_memories = [m for m, _ in ranked[:TOP_N]]
+    print("\n--- FINAL RANKING ---")
+    for mem, score in ranked[:TOP_N]:
+        print(mem["id"], mem["state"], round(score, 3))
 
-    # -----------------------------
-    # Step 11: Reinforcement
-    # -----------------------------
-    for mem in top_memories:
-        update_memory_access(mem["id"], user_id)
+    # 8. Select top N
+    top_memories = [memory for memory, _ in ranked[:TOP_N]]
+
+    # 9. Reinforcement — boost accessed memories
+    for memory in top_memories:
+        update_memory_access(memory["id"], user_id)
 
     return top_memories
