@@ -1,0 +1,7 @@
+rm ~/.memoryfade_token                                                           
+python cli/sms.py login hrithik@gmail.com 123456   
+
+python cli/sms.py search ""   
+python cli/sms.py status
+python cli/sms.py add
+python cli/sms.py decay
