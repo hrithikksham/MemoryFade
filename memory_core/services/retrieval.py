@@ -5,6 +5,8 @@ from services.decay_engine import apply_decay_to_user
 from config.settings import TOP_K, TOP_N
 from utils.time_utils import days_since
 
+REINFORCEMENT_THRESHOLD = 0.3
+
 
 # ----------------------------------
 # FINAL SCORING FUNCTION
@@ -43,7 +45,7 @@ def compute_final_score(hit, memory) -> float:
 def retrieve_and_update(
     query: str,
     user_id: str,
-    embedding_model: str = "mxbai" 
+    embedding_model: str = "mxbai"
 ) -> list:
 
     # 1. Apply decay before retrieval
@@ -55,7 +57,7 @@ def retrieve_and_update(
     # 3. Generate embedding
     embedding = generate_embedding(query, model_name=embedding_model)
 
-    # 4. Vector search — fixed: keyword arg is model_name not embedding_model
+    # 4. Vector search
     hits = search_vectors_with_scores(
         embedding,
         user_id=user_id,
@@ -89,12 +91,15 @@ def retrieve_and_update(
         if mem_id not in memory_map:
             continue
         memory = memory_map[mem_id]
+    
+        # ✅ Don't even score archived memories
+        if memory.get("state") == "ARCHIVED":
+            print(f"[SKIP ARCHIVED] {memory['id']} — {memory['text'][:40]}")
+            continue
+    
         score = compute_final_score(hit, memory)
         scored_memories.append((memory, score))
-
-    if not scored_memories:
-        return []
-
+    
     # 7. Rank by final score
     ranked = sorted(scored_memories, key=lambda x: x[1], reverse=True)
 
@@ -105,8 +110,12 @@ def retrieve_and_update(
     # 8. Select top N
     top_memories = [memory for memory, _ in ranked[:TOP_N]]
 
-    # 9. Reinforcement — boost accessed memories
-    for memory in top_memories:
-        update_memory_access(memory["id"], user_id)
+    # 9. Reinforcement — only boost memories above score threshold
+    for memory, score in ranked[:TOP_N]:
+        if score >= REINFORCEMENT_THRESHOLD:
+            update_memory_access(memory["id"], user_id)
+            print(f"[REINFORCE] {memory['id']} score: {score:.3f}")
+        else:
+            print(f"[SKIP REINFORCE] {memory['id']} score too low: {score:.3f}")
 
     return top_memories
