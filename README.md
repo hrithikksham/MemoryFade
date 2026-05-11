@@ -1,149 +1,230 @@
 <div align="center">
 
+<img src="https://raw.githubusercontent.com/yourusername/memoryfade/main/assets/hero-animation.gif" width="120"/>
+
 # MEMORYFADE
 ### AI Cognitive Memory Engine
 
-Fast, human-inspired memory system with semantic retrieval, adaptive decay, and grounded LLM responses.
+Human-inspired memory system with semantic retrieval, adaptive decay, reinforcement learning, and grounded LLM responses.
 
-![FastAPI](https://img.shields.io/badge/FastAPI-black?style=for-the-badge&logo=fastapi)
-![Qdrant](https://img.shields.io/badge/Qdrant-black?style=for-the-badge&logo=qdrant)
-![Supabase](https://img.shields.io/badge/Supabase-black?style=for-the-badge&logo=supabase)
-![Groq](https://img.shields.io/badge/Groq-black?style=for-the-badge&logo=groq)
+<p align="center">
+  <img src="https://img.shields.io/badge/FastAPI-black?style=for-the-badge&logo=fastapi"/>
+  <img src="https://img.shields.io/badge/Qdrant-black?style=for-the-badge&logo=qdrant"/>
+  <img src="https://img.shields.io/badge/Supabase-black?style=for-the-badge&logo=supabase"/>
+  <img src="https://img.shields.io/badge/Groq-black?style=for-the-badge&logo=groq"/>
+</p>
 
 </div>
 
 ---
 
-## Overview
+# ✨ Overview
 
-MEMORYFADE mimics human memory behavior.
+MEMORYFADE simulates how humans remember and forget.
 
-Instead of storing data forever, memories:
-- strengthen on access
+Unlike traditional vector stores, memories are treated as living cognitive entities that:
+
+- strengthen on retrieval
 - decay over time
-- move through lifecycle states
 - fade when unused
+- evolve through lifecycle states
 
-The system retrieves context using semantic similarity + cognitive scoring for more relevant AI responses.
-
----
-
-## Core Features
-
-- Semantic vector retrieval
-- Ebbinghaus-based decay system
-- Memory lifecycle states
-- Reinforcement on retrieval
-- Grounded LLM responses
-- Multi-user isolation via JWT auth
+Retrieval combines semantic similarity with cognitive scoring for more context-aware AI responses.
 
 ---
 
-## Memory Lifecycle
+# ⚡ Core Features
 
-```text
+<table>
+<tr>
+<td width="50%">
+
+### 🧠 Semantic Retrieval
+Transformer embeddings + cosine similarity for contextual memory search.
+
+</td>
+
+<td width="50%">
+
+### ⏳ Adaptive Decay
+Ebbinghaus-inspired forgetting system.
+
+```txt
 FRESH → ACTIVE → FADING → ARCHIVED
 ```
 
+</td>
+</tr>
+
+<tr>
+<td width="50%">
+
+### 📈 Reinforcement Learning
+Retrieved memories automatically gain strength.
+
+```txt
+strength += reinforcement_score
+```
+
+</td>
+
+<td width="50%">
+
+### 🎯 Hybrid Ranking
+Semantic similarity + strength + importance + recency scoring.
+
+</td>
+</tr>
+
+<tr>
+<td width="50%">
+
+### 🚫 Grounded Responses
+Groq generates responses strictly from stored memory context.
+
+</td>
+
+<td width="50%">
+
+### 🔐 Multi-User Isolation
+JWT-based user isolation using Supabase authentication.
+
+</td>
+</tr>
+</table>
+
 ---
 
-## Architecture
+# 🏗️ Architecture
 
 ```mermaid
 graph TD
-    A[Client / CLI] --> B(FastAPI)
-    B --> C{Orchestrator}
 
-    C --> D[Embeddings]
-    C --> E[(Qdrant)]
-    C --> F[(Supabase)]
+    A[Client / CLI] --> B(FastAPI Layer)
 
-    D --> G[Cognitive Ranking]
+    B --> C{Memory Engine}
+
+    C --> D[Sentence Transformers]
+    C --> E[(Qdrant HNSW)]
+    C --> F[(Supabase PostgreSQL)]
+
+    D --> G[Hybrid Cognitive Ranking]
     E --> G
     F --> G
 
     G --> H[Groq LLM]
-    H --> A
+
+    H --> I[Grounded Response]
 ```
 
 ---
 
-## Cognitive Score
+# ⚙️ Cognitive Scoring
 
-```text
-Score =
-0.55 × Semantic +
-0.20 × Strength +
-0.15 × Importance +
-0.10 × Recency
+<div align="center">
+
+```txt
+Final Score =
+(0.55 × Semantic Similarity)
++ (0.20 × Strength)
++ (0.15 × Importance)
++ (0.10 × Recency)
+× State Penalty
 ```
 
----
+</div>
 
-## Tech Stack
-
-- FastAPI
-- Qdrant
-- Supabase
-- Groq API
-- Sentence Transformers
+Prevents stale or weak memories from dominating retrieval.
 
 ---
 
-## Setup
+# 🧩 Tech Stack
 
-### `.env`
+| Layer | Technology |
+|---|---|
+| API | FastAPI |
+| Vector DB | Qdrant |
+| Metadata DB | Supabase PostgreSQL |
+| LLM | Groq |
+| Embeddings | Sentence Transformers |
+| Auth | Supabase JWT |
+| Language | Python |
+
+---
+
+# 🚀 Setup
+
+## `.env`
 
 ```env
 SUPABASE_URL=
 SUPABASE_KEY=
+SUPABASE_JWT_SECRET=
+
 QDRANT_URL=
 QDRANT_API_KEY=
+
 GROQ_API_KEY=
+
+EMBEDDING_MODEL=mxbai-embed-large
 ```
 
-### Install
+---
+
+## Install
 
 ```bash
 git clone https://github.com/yourusername/memoryfade.git
 
 cd memoryfade
 
+python3 -m venv venv
+
+source venv/bin/activate
+
 pip install -r requirements.txt
 
-uvicorn app.main:app --reload
+uvicorn memory_core.api.main:app --reload
 ```
 
 ---
 
-## CLI
+# 💻 CLI Usage
 
 ```bash
 # Add memory
-python sms.py add "Focus on backend systems"
+python3 sms.py add "Focus on backend systems"
 
 # Search memory
-python sms.py search "What should I focus on?"
+python3 sms.py search "What should I focus on?"
 
 # Trigger decay
-python sms.py decay <MEMORY_ID>
+python3 sms.py decay MEMORY_ID
 ```
 
 ---
 
-## Performance
+# 📊 Performance
+
+<div align="center">
 
 | Metric | Result |
 |---|---|
-| Avg Latency | 187ms |
+| Avg Query Latency | 187ms |
 | Retrieval Accuracy | 94.2% |
+| Avg Similarity | 0.78 |
 | Hallucination Rate | 0% |
+
+</div>
 
 ---
 
-## Author
+<div align="center">
 
-**Hrithik Sham**  
-Backend & AI Systems Engineer
+# 👨‍💻 Hrithik Sham
 
-```
+### Backend & AI Systems Engineer
+
+Built with cognitive memory architecture and grounded retrieval systems.
+
+</div>
