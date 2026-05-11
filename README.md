@@ -225,6 +225,5 @@ python3 sms.py decay MEMORY_ID
 
 ### Backend & AI Systems Engineer
 
-Built with cognitive memory architecture and grounded retrieval systems.
 
 </div>
