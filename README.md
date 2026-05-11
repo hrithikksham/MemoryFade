@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/yourusername/memoryfade/main/assets/hero-animation.gif" width="120"/>
+<img src="https://raw.githubusercontent.com/hrithikksham/memoryfade/main/assets/hero-animation.gif" width="120"/>
 
 # MEMORYFADE
 ### AI Cognitive Memory Engine
@@ -174,7 +174,7 @@ EMBEDDING_MODEL=mxbai-embed-large
 ## Install
 
 ```bash
-git clone https://github.com/yourusername/memoryfade.git
+git clone https://github.com/hrithikksham/memoryfade.git
 
 cd memoryfade
 
